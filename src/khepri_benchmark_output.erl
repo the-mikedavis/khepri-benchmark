@@ -96,13 +96,23 @@ print_diagram(
 print_diagram([], _Concurrency, _MaxLabelLen, _MaxValue) ->
     ok.
 
-backend_color("Khepri (safe)") -> "\033[38;2;204;255;51m";
-backend_color("Khepri (unsafe)") -> "\033[38;2;56;176;0m";
-backend_color("Khepri (low_latency)") -> "\033[38;2;144;224;239m";
-backend_color("Khepri (compromise)") -> "\033[38;2;0;180;216m";
-backend_color("Khepri (consistency)") -> "\033[38;2;0;119;182m";
-backend_color("Mnesia") -> "\033[38;2;188;71;73m";
+backend_color("Khepri (safe" ++ _) -> foreground(204, 255, 51);
+backend_color("Khepri (unsafe" ++ _) -> foreground(56, 176, 0);
+backend_color("Khepri (low_latency" ++ _) -> foreground(144, 224, 239);
+backend_color("Khepri (compromise" ++ _) -> foreground(0, 180, 216);
+backend_color("Khepri (consistency" ++ _) -> foreground(0, 119, 182);
+backend_color("Mnesia") -> foreground(188, 71, 73);
 backend_color(_) -> "".
+
+-spec foreground(Red, Blue, Green) -> string() when
+    Red :: Color,
+    Blue :: Color,
+    Green :: Color,
+    Color :: 0..255.
+%% @doc Formats an RGB color as a terminal escape sequence.
+
+foreground(R, G, B) ->
+    lists:flatten(io_lib:format("\033[38;2;~b;~b;~bm", [R, G, B])).
 
 generate_html(Options, SystemInfo, Results) ->
     BenchSingleNode = maps:get(bench_single_node, Options, true),
@@ -187,24 +197,42 @@ generate_html(Options, SystemInfo, Results) ->
                     QueryKhepriLowLat = collect_scores(
                                           Results, "Queries",
                                           "Khepri (low_latency)"),
+                    QueryKhepriLowLatCache =
+                      collect_scores(Results, "Queries",
+                                     "Khepri (low_latency, cache)"),
                     QueryKhepriCompromise = collect_scores(
                                               Results, "Queries",
                                               "Khepri (compromise)"),
+                    QueryKhepriCompromiseCache =
+                      collect_scores(Results, "Queries",
+                                     "Khepri (compromise, cache)"),
                     QueryKhepriConsistent = collect_scores(
                                               Results, "Queries",
                                               "Khepri (consistency)"),
+                    QueryKhepriConsistentCache =
+                      collect_scores(Results, "Queries",
+                                     "Khepri (consistency, cache)"),
                     QueryMnesia = collect_scores(
                                     Results, "Queries",
                                     "Mnesia"),
                     QueryKhepriLowLatMon = collect_monitoring(
                                              Results, "Queries",
                                              "Khepri (low_latency)"),
+                    QueryKhepriLowLatCacheMon =
+                      collect_monitoring(Results, "Queries",
+                                         "Khepri (low_latency, cache)"),
                     QueryKhepriCompromiseMon = collect_monitoring(
                                                  Results, "Queries",
                                                  "Khepri (compromise)"),
+                    QueryKhepriCompromiseCacheMon =
+                      collect_monitoring(Results, "Queries",
+                                         "Khepri (compromise, cache)"),
                     QueryKhepriConsistentMon = collect_monitoring(
                                                  Results, "Queries",
                                                  "Khepri (consistency)"),
+                    QueryKhepriConsistentCacheMon =
+                      collect_monitoring(Results, "Queries",
+                                         "Khepri (consistency, cache)"),
                     QueryMnesiaMon = collect_monitoring(
                                        Results, "Queries",
                                        "Mnesia"),
@@ -217,16 +245,34 @@ generate_html(Options, SystemInfo, Results) ->
                           "ops_samples" => jsx:encode(QueryKhepriLowLat),
                           "monitoring_samples" =>
                           jsx:encode(QueryKhepriLowLatMon)},
+                        #{"backend" => "khepri_lowlat_cache",
+                          "name" => "Khepri (low_latency, cache)",
+                          "ops_samples" => jsx:encode(QueryKhepriLowLatCache),
+                          "monitoring_samples" =>
+                          jsx:encode(QueryKhepriLowLatCacheMon)},
                         #{"backend" => "khepri_compromise",
                           "name" => "Khepri (compromise)",
                           "ops_samples" => jsx:encode(QueryKhepriCompromise),
                           "monitoring_samples" =>
                           jsx:encode(QueryKhepriCompromiseMon)},
+                        #{"backend" => "khepri_compromise_cache",
+                          "name" => "Khepri (compromise, cache)",
+                          "ops_samples" =>
+                          jsx:encode(QueryKhepriCompromiseCache),
+                          "monitoring_samples" =>
+                          jsx:encode(QueryKhepriCompromiseCacheMon)},
                         #{"backend" => "khepri_consistency",
                           "name" => "Khepri (consistency)",
-                          "ops_samples" => jsx:encode(QueryKhepriConsistent),
+                          "ops_samples" =>
+                          jsx:encode(QueryKhepriConsistent),
                           "monitoring_samples" =>
                           jsx:encode(QueryKhepriConsistentMon)},
+                        #{"backend" => "khepri_consistency_cache",
+                          "name" => "Khepri (consistency, cache)",
+                          "ops_samples" =>
+                          jsx:encode(QueryKhepriConsistentCache),
+                          "monitoring_samples" =>
+                          jsx:encode(QueryKhepriConsistentCacheMon)},
                         #{"backend" => "mnesia",
                           "name" => "Mnesia",
                           "ops_samples" => jsx:encode(QueryMnesia),

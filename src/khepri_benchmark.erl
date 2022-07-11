@@ -61,6 +61,11 @@ cli() ->
          help =>
          "Measure query performance of Khepri (consistent queries)",
          type => boolean},
+       #{name => bench_khepri_cache,
+         long => "-bench-khepri-cache",
+         help =>
+         "Measure query performance of Khepri (using the query cache)",
+         type => boolean},
        #{name => bench_mnesia,
          long => "-bench-mnesia",
          help => "Measure performance of Mnesia",
@@ -256,40 +261,27 @@ list_benchmarks(queries, Nodes, Options) ->
     BenchKhepriLowLat = maps:get(bench_khepri_low_latency, Options, true),
     BenchKhepriCompromise = maps:get(bench_khepri_compromise, Options, true),
     BenchKhepriConsistent = maps:get(bench_khepri_consistent, Options, true),
+    BenchKhepriCache = maps:get(bench_khepri_cache, Options, true),
     BenchMnesia = maps:get(bench_mnesia, Options, true),
-    Benchmarks0 = [],
-    Benchmarks1 = if
-                      BenchKhepriLowLat ->
-                          Benchmarks0 ++
-                          [khepri_benchmark_khepri:query_benchmark(
-                             Nodes, low_latency)];
-                      true ->
-                          Benchmarks0
+    FavorValues = lists:filter(fun(low_latency) -> BenchKhepriLowLat;
+                                  (compromise)  -> BenchKhepriCompromise;
+                                  (consistency) -> BenchKhepriConsistent end,
+                               [low_latency, compromise, consistency]),
+    CacheValues = if
+                      BenchKhepriCache -> [false, true];
+                      true             -> [false]
                   end,
-    Benchmarks2 = if
-                      BenchKhepriCompromise ->
-                          Benchmarks1 ++
-                          [khepri_benchmark_khepri:query_benchmark(
-                             Nodes, compromise)];
-                      true ->
-                          Benchmarks1
-                  end,
-    Benchmarks3 = if
-                      BenchKhepriConsistent ->
-                          Benchmarks2 ++
-                          [khepri_benchmark_khepri:query_benchmark(
-                             Nodes, consistency)];
-                      true ->
-                          Benchmarks2
-                  end,
-    Benchmarks4 = if
-                      BenchMnesia ->
-                          Benchmarks3 ++
-                          [khepri_benchmark_mnesia:query_benchmark(Nodes)];
-                      true ->
-                          Benchmarks3
-                  end,
-    Benchmarks4.
+    KhepriBenchmarks = [khepri_benchmark_khepri:query_benchmark(
+                          Nodes, Favor, UseCache)
+                        || Favor <- FavorValues, UseCache <- CacheValues],
+    Benchmarks = if
+                     BenchMnesia ->
+                         KhepriBenchmarks ++
+                         [khepri_benchmark_mnesia:query_benchmark(Nodes)];
+                     true ->
+                         KhepriBenchmarks
+                 end,
+    Benchmarks.
 
 run_benchmarks(Benchmarks, RunOptions, ConcurrencyOptions) ->
     run_benchmarks(Benchmarks, RunOptions, ConcurrencyOptions, []).
@@ -297,7 +289,7 @@ run_benchmarks(Benchmarks, RunOptions, ConcurrencyOptions) ->
 run_benchmarks(
   [{Name, Nodes, Benchmarks} | Rest],
   RunOptions, ConcurrencyOptions, Results) ->
-    io:format("~nBenchmarking ~ts:", [Name]),
+    io:format("~nBenchmarking ~ts:~n", [Name]),
     Result = run_benchmarks1(
                Benchmarks, Nodes, RunOptions, ConcurrencyOptions, []),
     Results1 = [{Name, Result} | Results],
@@ -308,7 +300,7 @@ run_benchmarks([], _RunOptions, _ConcurrencyOptions, Results) ->
 run_benchmarks1(
   [#{name := Name} = Benchmark | Rest],
   Nodes, RunOptions, ConcurrencyOptions, Results) ->
-    io:format(" ~ts...", [Name]),
+    io:format(" ~ts...~n", [Name]),
     Parent = self(),
     Monitor = spawn_link(
                 fun() ->

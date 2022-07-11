@@ -11,7 +11,7 @@
 -include_lib("khepri/include/khepri.hrl").
 
 -export([insert_benchmark/2,
-         query_benchmark/2,
+         query_benchmark/3,
          delete_benchmark/2]).
 
 -define(RA_SYSTEM, default).
@@ -48,10 +48,10 @@ insert_benchmark(Nodes, Profile) ->
               end
      }.
 
-query_benchmark([Node] = Nodes, Favor) when Node =:= node() ->
+query_benchmark([Node] = Nodes, Favor, UseCache) when Node =:= node() ->
     #{
-      name => name(Favor),
-      runner => fun(_) -> query_in_khepri(Favor) end,
+      name => name(Favor, UseCache),
+      runner => fun(_) -> query_in_khepri(Favor, UseCache) end,
       init => fun() ->
                       setup_khepri(Nodes, safe),
                       fill_khepri(),
@@ -60,10 +60,10 @@ query_benchmark([Node] = Nodes, Favor) when Node =:= node() ->
               end,
       done => fun(_) -> stop_khepri(Nodes) end
      };
-query_benchmark(Nodes, Favor) ->
+query_benchmark(Nodes, Favor, UseCache) ->
     #{
-      name => name(Favor),
-      runner => fun(_) -> query_in_khepri(Nodes, Favor) end,
+      name => name(Favor, UseCache),
+      runner => fun(_) -> query_in_khepri(Nodes, Favor, UseCache) end,
       init => fun() ->
                       setup_khepri(Nodes, safe),
                       fill_khepri(),
@@ -100,6 +100,11 @@ delete_benchmark(Nodes, Profile) ->
 
 name(Profile) ->
     lists:flatten(io_lib:format("Khepri (~s)", [Profile])).
+
+name(Favor, false) ->
+    name(Favor);
+name(Favor, true) ->
+    lists:flatten(io_lib:format("Khepri (~s, cache)", [Favor])).
 
 setup_khepri(Nodes, Profile) ->
     remove_khepri_dir(Nodes),
@@ -189,18 +194,20 @@ insert_in_khepri(Nodes) ->
                 [?RA_CLUSTER, [?TABLE, Key], Value]),
     ok.
 
-query_in_khepri(Favor) ->
+query_in_khepri(Favor, UseCache) ->
     Key = khepri_benchmark_utils:get_key(),
     {ok, _} = khepri:get(
-                ?RA_CLUSTER, [?TABLE, Key], #{favor => Favor}),
+                ?RA_CLUSTER, [?TABLE, Key], #{favor => Favor,
+                                              use_cache => UseCache}),
     ok.
 
-query_in_khepri(Nodes, Favor) ->
+query_in_khepri(Nodes, Favor, UseCache) ->
     Key = khepri_benchmark_utils:get_key(),
     Node = khepri_benchmark_utils:pick_node(Nodes),
     {ok, _} = rpc:call(
                 Node, khepri, get,
-                [?RA_CLUSTER, [?TABLE, Key], #{favor => Favor}]),
+                [?RA_CLUSTER, [?TABLE, Key], #{favor => Favor,
+                                               use_cache => UseCache}]),
     ok.
 
 delete_in_khepri() ->
